@@ -147,6 +147,13 @@ def parse_args():
     parser.add_argument('--min_train_len', type=int, default=0,
                         help="Filter sentences less than this length")
 
+    parser.add_argument('--elmo_options_file', default='extern_data/elmo/original/elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json',
+                        help='Options file for loading an elmo model')
+    parser.add_argument('--elmo_weights_file', default='extern_data/elmo/original/elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5',
+                        help='Weights file for loading an elmo model')
+    parser.add_argument('--use_elmo', dest='use_elmo', default=False, action='store_true',
+                        help='Use an elmo model as a source of parameters')
+
     args = parser.parse_args()
     return args
 
@@ -487,6 +494,15 @@ def load_pretrain(args):
     return pretrain
 
 
+def load_elmo(args):
+    # This import is here so that Elmo integration can be treated
+    # as an optional feature
+    import allennlp.modules.elmo as elmo
+
+    logger.info("Loading elmo: options %s weights %s" % (args.elmo_options_file, args.elmo_weights_file))
+    elmo_model = elmo.Elmo(args.elmo_options_file, args.elmo_weights_file, 1)
+    return elmo_model
+
 def print_args(args):
     """
     For record keeping purposes, print out the arguments when training
@@ -516,14 +532,15 @@ def main():
         train_set = None
 
     pretrain = load_pretrain(args)
+    elmo_model = load_elmo(args) if args.use_elmo else None
 
     if args.load_name:
-        model = cnn_classifier.load(args.load_name, pretrain)
+        model = cnn_classifier.load(args.load_name, pretrain, elmo_model)
     else:
         assert train_set is not None
         labels = dataset_labels(train_set)
         extra_vocab = dataset_vocab(train_set)
-        model = cnn_classifier.CNNClassifier(pretrain, extra_vocab, labels, args)
+        model = cnn_classifier.CNNClassifier(pretrain, extra_vocab, elmo_model, labels, args)
 
     if args.cuda:
         model.cuda()
