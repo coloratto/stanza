@@ -18,6 +18,7 @@ from stanza.models.common.pretrain import Pretrain
 
 import stanza.models.classifiers.classifier_args as classifier_args
 import stanza.models.classifiers.cnn_classifier as cnn_classifier
+import stanza.models.classifiers.common as common
 import stanza.models.classifiers.data as data
 
 class Loss(Enum):
@@ -147,9 +148,9 @@ def parse_args():
     parser.add_argument('--min_train_len', type=int, default=0,
                         help="Filter sentences less than this length")
 
-    parser.add_argument('--elmo_options_file', default='extern_data/elmo/original/elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json',
+    parser.add_argument('--elmo_options_path', default='extern_data/elmo/original/elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json',
                         help='Options file for loading an elmo model')
-    parser.add_argument('--elmo_weights_file', default='extern_data/elmo/original/elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5',
+    parser.add_argument('--elmo_weights_path', default='extern_data/elmo/original/elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5',
                         help='Weights file for loading an elmo model')
     parser.add_argument('--use_elmo', dest='use_elmo', default=False, action='store_true',
                         help='Use an elmo model as a source of parameters')
@@ -494,15 +495,6 @@ def load_pretrain(args):
     return pretrain
 
 
-def load_elmo(args):
-    # This import is here so that Elmo integration can be treated
-    # as an optional feature
-    import allennlp.modules.elmo as elmo
-
-    logger.info("Loading elmo: options %s weights %s" % (args.elmo_options_file, args.elmo_weights_file))
-    elmo_model = elmo.Elmo(args.elmo_options_file, args.elmo_weights_file, 1)
-    return elmo_model
-
 def print_args(args):
     """
     For record keeping purposes, print out the arguments when training
@@ -532,11 +524,12 @@ def main():
         train_set = None
 
     pretrain = load_pretrain(args)
-    elmo_model = load_elmo(args) if args.use_elmo else None
 
     if args.load_name:
-        model = cnn_classifier.load(args.load_name, pretrain, elmo_model)
+        model = cnn_classifier.load(args.load_name, pretrain,
+                                    args.elmo_options_path, args.elmo_weights_path)
     else:
+        elmo_model = common.load_elmo(args.elmo_options_path, args.elmo_weights_path) if args.use_elmo else None
         assert train_set is not None
         labels = dataset_labels(train_set)
         extra_vocab = dataset_vocab(train_set)

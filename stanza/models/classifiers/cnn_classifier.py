@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import stanza.models.classifiers.classifier_args as classifier_args
+import stanza.models.classifiers.common as common
 import stanza.models.classifiers.data as data
 from stanza.models.common.vocab import PAD_ID, UNK_ID
 
@@ -300,11 +301,23 @@ def save(filename, model, skip_modules=True):
         skipped = [k for k in model_state.keys() if k.split('.')[0] in model.unsaved_modules]
         for k in skipped:
             del model_state[k]
+
+    if model.config.use_elmo:
+        elmo_model = model.elmo_model
+        scalar_mixes = elmo_model._scalar_mixes[0]
+        elmo_scalar_mixes = [scalar_mixes.scalar_parameters[0].item(),
+                             scalar_mixes.scalar_parameters[1].item(),
+                             scalar_mixes.scalar_parameters[2].item()]
+        print(elmo_scalar_mixes)
+    else:
+        elmo_scalar_mixes = None
+
     params = {
         'model': model_state,
         'config': model.config,
         'labels': model.labels,
         'extra_vocab': model.extra_vocab,
+        'elmo_scalar_mixes': elmo_scalar_mixes
     }
     try:
         torch.save(params, filename)
@@ -314,13 +327,22 @@ def save(filename, model, skip_modules=True):
     except BaseException as e:
         logger.warning("Saving failed to {}... continuing anyway.  Error: {}".format(filename, e))
 
-def load(filename, pretrain, elmo_model):
+def load(filename, pretrain, elmo_options_path, elmo_weights_path):
     try:
         checkpoint = torch.load(filename, lambda storage, loc: storage)
     except BaseException:
         logger.exception("Cannot load model from {}".format(filename))
         raise
     logger.debug("Loaded model {}".format(filename))
+
+    elmo_scalar_mixes = checkpoint.get('elmo_scalar_mixes', None)
+    if elmo_scalar_mixes:
+        if not elmo_weights_path or not elmo_options_path:
+            raise ValueError("Not given elmo model parameters for a model which was trained with elmo")
+        elmo_model = common.load_elmo(elmo_options_path, elmo_weights_path,
+                                      saved_scalar_mixes=checkpoint['elmo_scalar_mixes'])
+    else:
+        elmo_model = None
 
     model_type = getattr(checkpoint['config'], 'model_type', 'CNNClassifier')
     if model_type == 'CNNClassifier':
