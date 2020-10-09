@@ -12,11 +12,6 @@ import stanza.models.classifiers.classifier_args as classifier_args
 import stanza.models.classifiers.data as data
 from stanza.models.common.vocab import PAD_ID, UNK_ID
 
-try:
-    import allennlp.modules.elmo as elmo
-except ImportError:
-    elmo = None
-
 """
 The CNN classifier is based on Yoon Kim's work:
 
@@ -125,7 +120,8 @@ class CNNClassifier(nn.Module):
 
         if self.config.use_elmo:
             # TODO: add the ability to map this to a different dimension?
-            total_embedding_dim = total_embedding_dim + self.elmo_model.get_output_dim()
+            elmo_dim = elmo_model.sents2elmo([["Test"]])[0].shape[1]
+            total_embedding_dim = total_embedding_dim + elmo_dim
 
         self.conv_layers = nn.ModuleList([nn.Conv2d(in_channels=1,
                                                     out_channels=self.config.filter_channels,
@@ -266,8 +262,9 @@ class CNNClassifier(nn.Module):
             all_inputs = [input_vectors]
 
         if self.config.use_elmo:
-            elmo_batch_ids = elmo.batch_to_ids(elmo_batch_words).to(device=device)
-            elmo_tensor = self.elmo_model(elmo_batch_ids)['elmo_representations'][0]
+            elmo_arrays = self.elmo_model.sents2elmo(elmo_batch_words)
+            elmo_tensors = [torch.tensor(x).to(device=device) for x in elmo_arrays]
+            elmo_tensor = torch.stack(elmo_tensors)
             all_inputs.append(elmo_tensor)
 
         if len(all_inputs) > 1:

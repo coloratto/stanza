@@ -26,6 +26,7 @@ class Loss(Enum):
     LOG_CROSS = 3
 
 logger = logging.getLogger('stanza')
+logging.getLogger('elmoformanylangs').setLevel(logging.WARNING)
 
 DEFAULT_TRAIN='extern_data/sentiment/sst-processed/fiveclass/train-phrases.txt'
 DEFAULT_DEV='extern_data/sentiment/sst-processed/fiveclass/dev-roots.txt'
@@ -147,10 +148,8 @@ def parse_args():
     parser.add_argument('--min_train_len', type=int, default=0,
                         help="Filter sentences less than this length")
 
-    parser.add_argument('--elmo_options_file', default='extern_data/elmo/original/elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json',
-                        help='Options file for loading an elmo model')
-    parser.add_argument('--elmo_weights_file', default='extern_data/elmo/original/elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5',
-                        help='Weights file for loading an elmo model')
+    parser.add_argument('--elmo_model', default='extern_data/manyelmo/english',
+                        help='Directory with elmo model')
     parser.add_argument('--use_elmo', dest='use_elmo', default=False, action='store_true',
                         help='Use an elmo model as a source of parameters')
 
@@ -494,13 +493,13 @@ def load_pretrain(args):
     return pretrain
 
 
-def load_elmo(args):
+def load_elmo(elmo_model):
     # This import is here so that Elmo integration can be treated
     # as an optional feature
-    import allennlp.modules.elmo as elmo
+    import elmoformanylangs
 
-    logger.info("Loading elmo: options %s weights %s" % (args.elmo_options_file, args.elmo_weights_file))
-    elmo_model = elmo.Elmo(args.elmo_options_file, args.elmo_weights_file, 1)
+    logger.info("Loading elmo: %s" % elmo_model)
+    elmo_model = elmoformanylangs.Embedder(elmo_model)
     return elmo_model
 
 def print_args(args):
@@ -532,7 +531,7 @@ def main():
         train_set = None
 
     pretrain = load_pretrain(args)
-    elmo_model = load_elmo(args) if args.use_elmo else None
+    elmo_model = load_elmo(args.elmo_model) if args.use_elmo else None
 
     if args.load_name:
         model = cnn_classifier.load(args.load_name, pretrain, elmo_model)
